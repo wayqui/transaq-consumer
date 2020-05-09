@@ -1,0 +1,35 @@
+server:
+  port: 8085
+spring:
+  profiles:
+    active: local
+---
+spring:
+  profiles: local
+  data:
+    mongodb:
+      port: 27017
+      host: localhost
+      database: transaq
+  kafka:
+    consumer:
+      bootstrap-servers: localhost:9092
+      key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      group-id: kafka-consumer-group
+
+#    streams:
+#      application-id: testing-kafka
+#      bootstrap-servers: localhost:9092
+#      properties:
+#        default:
+#          key:
+#            serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+#          value:
+#            serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+
+
+
+
+
+
