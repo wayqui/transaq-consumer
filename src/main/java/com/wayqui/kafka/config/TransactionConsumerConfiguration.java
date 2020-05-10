@@ -10,6 +10,10 @@ import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.listener.ContainerProperties;
+import org.springframework.retry.RetryPolicy;
+import org.springframework.retry.backoff.FixedBackOffPolicy;
+import org.springframework.retry.policy.SimpleRetryPolicy;
+import org.springframework.retry.support.RetryTemplate;
 
 @Configuration
 @EnableKafka
@@ -31,6 +35,23 @@ public class TransactionConsumerConfiguration {
         factory.setErrorHandler((e, consumerRecord) -> {
             log.error("An exception occurred {}, the message is {}", e.getMessage(), consumerRecord.toString());
         });
+
+        // Configure custom retry policy
+        factory.setRetryTemplate(createRetryTemplate(3, 1000));
+
         return factory;
+    }
+
+    /**
+     * Create a new retry policy based on max number of attempts and backOffPeriod
+     * @return Customized RetryPolicy
+     */
+    private RetryTemplate createRetryTemplate(int maxAttempts, long backOffPeriod) {
+        RetryTemplate retryTemplate = new RetryTemplate();
+        FixedBackOffPolicy fixedPolicy = new FixedBackOffPolicy();
+        fixedPolicy.setBackOffPeriod(backOffPeriod);
+        retryTemplate.setBackOffPolicy(fixedPolicy);
+        retryTemplate.setRetryPolicy(new SimpleRetryPolicy(maxAttempts));
+        return retryTemplate;
     }
 }
