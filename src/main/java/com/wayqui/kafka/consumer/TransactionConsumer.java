@@ -9,7 +9,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class TransactionConsumer {
 
-    @KafkaListener(topics = "transaction-events")
+    //@KafkaListener(topics = "transaction-events")
     public void onMessage(ConsumerRecord<Integer, String> record) {
         log.info(record.toString());
     }
