@@ -12,6 +12,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.SpyBean;
 import org.springframework.kafka.config.KafkaListenerEndpointRegistry;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.support.Acknowledgment;
 import org.springframework.kafka.test.EmbeddedKafkaBroker;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
@@ -19,6 +20,7 @@ import org.springframework.test.context.TestPropertySource;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -31,7 +33,10 @@ import static org.mockito.Mockito.verify;
 @Slf4j
 @EmbeddedKafka(
         topics = {"transaction-events"},
-        partitions = 3)
+        partitions = 3,
+        brokerProperties={
+                "log.dir=out/embedded-kafka"
+        })
 @TestPropertySource(
         properties = {"spring.kafka.producer.bootstrap-servers=${spring.embedded.kafka.brokers}",
                 "spring.kafka.consumer.bootstrap-servers=${spring.embedded.kafka.brokers}"})
@@ -41,7 +46,7 @@ public class TransactionConsumerManualIntegrationTest {
     EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @Autowired
-    KafkaTemplate<Integer, String> kafkaTemplate;
+    KafkaTemplate<Long, String> kafkaTemplate;
 
     @Autowired
     KafkaListenerEndpointRegistry endpointRegistry;
@@ -55,23 +60,27 @@ public class TransactionConsumerManualIntegrationTest {
     @Autowired
     TransactionService service;
 
+    TransactionDto transactionDto;
+
     @BeforeEach
     void setUp() {
         endpointRegistry.getListenerContainers().forEach(container -> {
             ContainerTestUtils.waitForAssignment(container, embeddedKafkaBroker.getPartitionsPerTopic());
         });
-    }
 
-    @Test
-    void registerNewTransaction() throws ExecutionException, InterruptedException {
-        // Given
-        TransactionDto transactionDto = TransactionDto.builder()
+        transactionDto = TransactionDto.builder()
+                .reference(UUID.randomUUID().toString())
                 .amount(13.0)
                 .date(Instant.now())
                 .description("Restaurant payment")
                 .fee(1.18)
                 .iban("ES9820385778983000760236")
                 .build();
+    }
+
+    @Test
+    void registerNewTransaction() throws ExecutionException, InterruptedException {
+        // Given
         String transactJSON = new Gson().toJson(transactionDto);
 
         kafkaTemplate.sendDefault(transactJSON).get();
@@ -81,12 +90,53 @@ public class TransactionConsumerManualIntegrationTest {
         latch.await(3, TimeUnit.SECONDS);
 
         // Then
-        //verify(consumerSpy, times(1)).onMessage(isA(ConsumerRecord.class));
-        //verify(serviceSpy, times(1)).insertTransaction(isA(ConsumerRecord.class));
+        verify(consumerSpy, times(1)).onMessage(isA(ConsumerRecord.class), isA(Acknowledgment.class));
+        verify(serviceSpy, times(1)).insertTransaction(isA(TransactionDto.class));
 
         List<TransactionDto> results = service.findAllTransactions();
 
         assert results.size() > 0;
-        
+    }
+
+    @Test
+    void throwing_recoverable_error() throws ExecutionException, InterruptedException {
+        // Given
+        transactionDto.setReference(null);
+        String transactJSON = new Gson().toJson(transactionDto);
+
+        kafkaTemplate.sendDefault(transactJSON).get();
+
+        // When
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await(3, TimeUnit.SECONDS);
+
+        // Then
+        verify(consumerSpy, times(4)).onMessage(isA(ConsumerRecord.class), isA(Acknowledgment.class));
+        verify(serviceSpy, times(4)).insertTransaction(isA(TransactionDto.class));
+
+        List<TransactionDto> results = service.findAllTransactions();
+
+        assert results.size() > 0;
+    }
+
+    @Test
+    void throwing_non_recoverable_error() throws ExecutionException, InterruptedException {
+        // Given
+        transactionDto.setAmount(-1*transactionDto.getAmount());
+        String transactJSON = new Gson().toJson(transactionDto);
+
+        kafkaTemplate.sendDefault(transactJSON).get();
+
+        // When
+        CountDownLatch latch = new CountDownLatch(1);
+        latch.await(3, TimeUnit.SECONDS);
+
+        // Then
+        verify(consumerSpy, times(1)).onMessage(isA(ConsumerRecord.class), isA(Acknowledgment.class));
+        verify(serviceSpy, times(1)).insertTransaction(isA(TransactionDto.class));
+
+        List<TransactionDto> results = service.findAllTransactions();
+
+        assert results.size() > 0;
     }
 }
