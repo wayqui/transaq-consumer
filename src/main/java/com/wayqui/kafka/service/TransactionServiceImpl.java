@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.RecoverableDataAccessException;
 import org.springframework.stereotype.Service;
 
+import java.math.BigDecimal;
 import java.util.List;
 
 @Service
@@ -20,11 +21,12 @@ public class TransactionServiceImpl implements TransactionService {
 
     @Override
     public void insertTransaction(TransactionDto transactionDto) {
-        if (transactionDto.getReference() == null) {
+        // FIXME This recoverable error is just an example
+        if (transactionDto.getAmount().add(transactionDto.getFee()).compareTo(new BigDecimal("0")) == 0 ) {
             log.error("onMessage -> A reference id must be informed");
             throw new RecoverableDataAccessException("A reference id must be informed");
         }
-        if (transactionDto.getAmount() < 0) {
+        if (transactionDto.getAmount().compareTo(new BigDecimal("0")) < 0) {
             log.error("onMessage -> A negative amount is not valid here");
             throw new IllegalArgumentException("A negative amount is not valid here");
         }

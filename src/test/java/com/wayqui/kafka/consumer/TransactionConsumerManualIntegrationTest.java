@@ -1,6 +1,6 @@
 package com.wayqui.kafka.consumer;
 
-import com.google.gson.Gson;
+import com.wayqui.avro.TransactionAvro;
 import com.wayqui.kafka.dto.TransactionDto;
 import com.wayqui.kafka.service.TransactionService;
 import lombok.extern.slf4j.Slf4j;
@@ -18,6 +18,8 @@ import org.springframework.kafka.test.context.EmbeddedKafka;
 import org.springframework.kafka.test.utils.ContainerTestUtils;
 import org.springframework.test.context.TestPropertySource;
 
+import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -46,7 +48,7 @@ public class TransactionConsumerManualIntegrationTest {
     EmbeddedKafkaBroker embeddedKafkaBroker;
 
     @Autowired
-    KafkaTemplate<Long, String> kafkaTemplate;
+    KafkaTemplate<Long, TransactionAvro> kafkaTemplate;
 
     @Autowired
     KafkaListenerEndpointRegistry endpointRegistry;
@@ -70,10 +72,10 @@ public class TransactionConsumerManualIntegrationTest {
 
         transactionDto = TransactionDto.builder()
                 .reference(UUID.randomUUID().toString())
-                .amount(13.0)
+                .amount(BigDecimal.valueOf(13.0))
                 .date(Instant.now())
                 .description("Restaurant payment")
-                .fee(1.18)
+                .fee(BigDecimal.valueOf(1.18))
                 .iban("ES9820385778983000760236")
                 .build();
     }
@@ -81,9 +83,19 @@ public class TransactionConsumerManualIntegrationTest {
     @Test
     void registerNewTransaction() throws ExecutionException, InterruptedException {
         // Given
-        String transactJSON = new Gson().toJson(transactionDto);
+        ByteBuffer feeBuff = ByteBuffer.wrap(transactionDto.getFee().unscaledValue().toByteArray());
+        ByteBuffer amountBuff = ByteBuffer.wrap(transactionDto.getAmount().unscaledValue().toByteArray());
 
-        kafkaTemplate.sendDefault(transactJSON).get();
+        TransactionAvro transactionAvro = TransactionAvro.newBuilder()
+                .setFee(feeBuff)
+                .setAmount(amountBuff)
+                .setReference(transactionDto.getReference())
+                .setIban(transactionDto.getIban())
+                .setDescription(transactionDto.getDescription())
+                .setDate(transactionDto.getDate().toEpochMilli())
+                .build();
+
+        kafkaTemplate.sendDefault(transactionAvro).get();
 
         // When
         CountDownLatch latch = new CountDownLatch(1);
@@ -101,10 +113,21 @@ public class TransactionConsumerManualIntegrationTest {
     @Test
     void throwing_recoverable_error() throws ExecutionException, InterruptedException {
         // Given
-        transactionDto.setReference(null);
-        String transactJSON = new Gson().toJson(transactionDto);
+        transactionDto.setFee(transactionDto.getAmount().multiply(BigDecimal.valueOf(-1)));
 
-        kafkaTemplate.sendDefault(transactJSON).get();
+        ByteBuffer feeBuff = ByteBuffer.wrap(transactionDto.getFee().unscaledValue().toByteArray());
+        ByteBuffer amountBuff = ByteBuffer.wrap(transactionDto.getAmount().unscaledValue().toByteArray());
+
+        TransactionAvro transactionAvro = TransactionAvro.newBuilder()
+                .setFee(feeBuff)
+                .setAmount(amountBuff)
+                .setReference(UUID.randomUUID().toString())
+                .setIban(transactionDto.getIban())
+                .setDescription(transactionDto.getDescription())
+                .setDate(transactionDto.getDate().toEpochMilli())
+                .build();
+
+        kafkaTemplate.sendDefault(transactionAvro).get();
 
         // When
         CountDownLatch latch = new CountDownLatch(1);
@@ -122,10 +145,21 @@ public class TransactionConsumerManualIntegrationTest {
     @Test
     void throwing_non_recoverable_error() throws ExecutionException, InterruptedException {
         // Given
-        transactionDto.setAmount(-1*transactionDto.getAmount());
-        String transactJSON = new Gson().toJson(transactionDto);
+        transactionDto.setAmount(transactionDto.getAmount().multiply(new BigDecimal(-1)));
 
-        kafkaTemplate.sendDefault(transactJSON).get();
+        ByteBuffer feeBuff = ByteBuffer.wrap(transactionDto.getFee().unscaledValue().toByteArray());
+        ByteBuffer amountBuff = ByteBuffer.wrap(transactionDto.getAmount().unscaledValue().toByteArray());
+
+        TransactionAvro transactionAvro = TransactionAvro.newBuilder()
+                .setFee(feeBuff)
+                .setAmount(amountBuff)
+                .setReference(transactionDto.getReference())
+                .setIban(transactionDto.getIban())
+                .setDescription(transactionDto.getDescription())
+                .setDate(transactionDto.getDate().toEpochMilli())
+                .build();
+
+        kafkaTemplate.sendDefault(transactionAvro).get();
 
         // When
         CountDownLatch latch = new CountDownLatch(1);

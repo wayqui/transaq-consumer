@@ -1,5 +1,6 @@
 package com.wayqui.kafka.config;
 
+import com.wayqui.avro.TransactionAvro;
 import com.wayqui.kafka.consumer.TransactionConsumerManual;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -43,7 +44,7 @@ public class TransactionConsumerConfiguration {
 
         // Configuring error handler
         factory.setErrorHandler((e, consumerRecord) -> {
-            log.error("MANUAL CONSUMER CONFIG: An exception occurred {}, the message is {}", e.getMessage(), consumerRecord.toString());
+            log.error("MANUAL CONSUMER CONFIG: An exception occurred {}", e.getMessage());
         });
 
         // Configure custom retry policy
@@ -51,17 +52,15 @@ public class TransactionConsumerConfiguration {
 
         // Configure recovery callback (sending the message via de producer to the topic)
         factory.setRecoveryCallback(retryContext -> {
-            Arrays.asList(retryContext.attributeNames()).forEach(System.out::println);
-
             if (retryContext.getLastThrowable().getCause() instanceof RecoverableDataAccessException) {
                 log.error("Inside the recoverable callback");
 
-                ConsumerRecord<Long, String> record =
-                        (ConsumerRecord<Long, String>) retryContext.getAttribute("record");
+                ConsumerRecord<Long, TransactionAvro> record =
+                        (ConsumerRecord<Long, TransactionAvro>) retryContext.getAttribute("record");
 
                 consumerManual.sendRecoverable(record.key(), record.value());
             } else {
-                log.error("Inside the NON recoverable callback");
+                log.error("Inside the NON recoverable callback", retryContext.getLastThrowable());
             }
 
             return null;

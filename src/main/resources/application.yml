@@ -17,12 +17,31 @@ spring:
     consumer:
       bootstrap-servers: localhost:9092
       key-deserializer: org.apache.kafka.common.serialization.LongDeserializer
-      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: io.confluent.kafka.serializers.KafkaAvroDeserializer
       group-id: kafka-consumer-group
+      properties:
+        specific:
+          avro:
+            reader: true
+        acks: 1
+        retries: 10
+        schema:
+          registry:
+            url: http://localhost:8081
     producer:
       bootstrap-servers: localhost:9092
       key-serializer: org.apache.kafka.common.serialization.LongSerializer
-      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: io.confluent.kafka.serializers.KafkaAvroSerializer
+      properties:
+        specific:
+          avro:
+            reader: true
+        acks: 1
+        retries: 10
+        schema:
+          registry:
+            url: http://localhost:8081
+
 #    streams:
 #      application-id: testing-kafka
 #      bootstrap-servers: localhost:9092

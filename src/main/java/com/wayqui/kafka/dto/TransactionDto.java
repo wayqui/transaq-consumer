@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 
 @Data
@@ -16,7 +17,7 @@ public class TransactionDto {
     private String reference;
     private String iban;
     private Instant date;
-    private Double amount;
-    private Double fee;
+    private BigDecimal amount;
+    private BigDecimal fee;
     private String description;
 }
